@@ -105,6 +105,22 @@ services:
       retries: 10
       start_period: 60s
 
+  # Carga inicial: cuando los 4 nodos están listos, corre el script .cql una vez y termina
+  init-db:
+    image: cassandra:${CASSANDRA_VERSION}
+    container_name: init-db
+    command: cqlsh 172.30.0.11 -f /scripts/esquema_y_datos.cql
+    volumes:
+      - ./scripts:/scripts:ro
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.19
+    depends_on:
+      cass4:
+        condition: service_healthy
+    restart: "no"
+
+  # Cliente Python - generador de carga (arranca cuando ya existen las tablas)
   client:
     container_name: client
     build:
@@ -113,14 +129,19 @@ services:
     environment:
       CASSANDRA_HOSTS: 172.30.0.11,172.30.0.12,172.30.0.13,172.30.0.14
       CASSANDRA_KEYSPACE: logistica_portuaria
-      CASSANDRA_DC: ${CASSANDRA_DC}
+      CASSANDRA_DC: ${CASSANDRA_DC:-datacenter1}
       INTERVALO_SEGUNDOS: 1
       PYTHONUNBUFFERED: 1
+      # QUORUM por defecto; para probar ONE: $env:CONSISTENCIA="ONE" antes de recrear el cliente
+      CONSISTENCIA: ${CONSISTENCIA:-QUORUM}
     networks:
       cassandra-net:
         ipv4_address: 172.30.0.20
-    profiles:
-      - demo
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    # Si el cliente falla al conectarse (Cassandra aun arrancando), Docker lo reintenta
+    restart: on-failure
 
 networks:
   cassandra-net:
