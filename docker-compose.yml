@@ -1,0 +1,137 @@
+services:
+  # semilla (seed) del clúster
+  cass1:
+    image: cassandra:${CASSANDRA_VERSION}
+    container_name: cass1
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CLUSTER_NAME}
+      CASSANDRA_SEEDS: 172.30.0.11
+      CASSANDRA_LISTEN_ADDRESS: 172.30.0.11
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_DC: ${CASSANDRA_DC}
+      CASSANDRA_RACK: rack1
+      MAX_HEAP_SIZE: ${MAX_HEAP}
+    volumes:
+      - cass1-data:/var/lib/cassandra
+      - ./scripts:/scripts:ro
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.11
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Nodo 2
+  cass2:
+    image: cassandra:${CASSANDRA_VERSION}
+    container_name: cass2
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CLUSTER_NAME}
+      CASSANDRA_SEEDS: 172.30.0.11
+      CASSANDRA_LISTEN_ADDRESS: 172.30.0.12
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_DC: ${CASSANDRA_DC}
+      CASSANDRA_RACK: rack1
+      MAX_HEAP_SIZE: ${MAX_HEAP}
+    volumes:
+      - cass2-data:/var/lib/cassandra
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.12
+    depends_on:
+      cass1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Nodo 3
+  cass3:
+    image: cassandra:${CASSANDRA_VERSION}
+    container_name: cass3
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CLUSTER_NAME}
+      CASSANDRA_SEEDS: 172.30.0.11
+      CASSANDRA_LISTEN_ADDRESS: 172.30.0.13
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_DC: ${CASSANDRA_DC}
+      CASSANDRA_RACK: rack1
+      MAX_HEAP_SIZE: ${MAX_HEAP}
+    volumes:
+      - cass3-data:/var/lib/cassandra
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.13
+    depends_on:
+      cass2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Nodo 4 
+  cass4:
+    image: cassandra:${CASSANDRA_VERSION}
+    container_name: cass4
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CLUSTER_NAME}
+      CASSANDRA_SEEDS: 172.30.0.11
+      CASSANDRA_LISTEN_ADDRESS: 172.30.0.14
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_DC: ${CASSANDRA_DC}
+      CASSANDRA_RACK: rack1
+      MAX_HEAP_SIZE: ${MAX_HEAP}
+    volumes:
+      - cass4-data:/var/lib/cassandra
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.14
+    depends_on:
+      cass3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  client:
+    container_name: client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    environment:
+      CASSANDRA_HOSTS: 172.30.0.11,172.30.0.12,172.30.0.13,172.30.0.14
+      CASSANDRA_KEYSPACE: logistica_portuaria
+      CASSANDRA_DC: ${CASSANDRA_DC}
+      INTERVALO_SEGUNDOS: 1
+      PYTHONUNBUFFERED: 1
+    networks:
+      cassandra-net:
+        ipv4_address: 172.30.0.20
+    profiles:
+      - demo
+
+networks:
+  cassandra-net:
+    name: cassandra-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  cass1-data:
+  cass2-data:
+  cass3-data:
+  cass4-data:
